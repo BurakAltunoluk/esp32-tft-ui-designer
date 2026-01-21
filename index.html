@@ -4,12 +4,22 @@
 <meta charset="UTF-8">
 <title>ESP32 TFT UI Designer</title>
 </head>
-<body style="margin:0">
 
+<body style="margin:0">
 <div style="display:flex;height:100vh;font-family:Arial;background:#222;color:#fff">
 
 <!-- SOL PANEL -->
 <div style="width:460px;padding:10px">
+
+  <!-- ORIENTATION -->
+  Orientation:
+  <select id="orientation">
+    <option value="landscape" selected>Landscape (320x240)</option>
+    <option value="portrait">Portrait (240x320)</option>
+  </select>
+  <br><br>
+
+  <!-- CANVAS -->
   <div id="canvas" style="
     width:320px;height:240px;
     background:#000;
@@ -17,25 +27,22 @@
     position:relative;
     margin-bottom:10px"></div>
 
-  <!-- Canvas BG -->
-  Canvas BG: <input id="canvas_bg" type="color" value="#000000"><br><br>
+  Canvas BG:
+  <input id="canvas_bg" type="color" value="#000000"><br><br>
 
-  <!-- Add elements -->
   <button onclick="addLabel()">Add Label</button>
   <button onclick="addButton()">Add Button</button>
   <button onclick="addLine()">Add Line</button>
   <br><br>
 
-  <!-- WebSerial -->
   <button onclick="connectSerial()">🔌 Connect ESP32</button>
   <button onclick="disconnectSerial()">❌ Disconnect</button>
   <button onclick="sendSerial()">🚀 Send to ESP32</button>
 
-  <!-- Arduino code output -->
   <textarea id="code" style="width:100%;height:160px;margin-top:10px"></textarea>
 </div>
 
-<!-- PROPERTIES + SERIAL -->
+<!-- PROPERTIES -->
 <div style="flex:1;padding:10px">
   <h3>Properties</h3>
 
@@ -69,7 +76,7 @@
   <br>
   <button onclick="del()">🗑 Delete</button>
 
-  <h3 style="margin-top:20px">Serial Monitor (RX)</h3>
+  <h3>Serial Monitor (RX)</h3>
   <textarea id="rx"
     style="width:100%;height:180px;
     background:#111;color:#0f0;
@@ -83,11 +90,23 @@ const canvas = document.getElementById("canvas");
 const codeBox = document.getElementById("code");
 const rxBox = document.getElementById("rx");
 const canvasBgPicker = document.getElementById("canvas_bg");
+const orientSel = document.getElementById("orientation");
 let items=[], sel=null;
 
+/* ---------- ORIENTATION ---------- */
+orientSel.onchange = ()=>{
+  if(orientSel.value=="portrait"){
+    canvas.style.width="240px";
+    canvas.style.height="320px";
+  }else{
+    canvas.style.width="320px";
+    canvas.style.height="240px";
+  }
+  gen();
+}
+
 /* ---------- SERIAL ---------- */
-let port, writer, reader;
-let keepReading = false;
+let port, writer, reader, keepReading=false;
 
 /* ---------- HELPERS ---------- */
 function rgb(c){
@@ -110,7 +129,7 @@ function drag(el){
   }
 }
 
-/* ---------- ADD ELEMENTS ---------- */
+/* ---------- ADD ---------- */
 function baseEl(style){
   let e=document.createElement("div");
   e.style=style;
@@ -131,7 +150,7 @@ function addLabel(){
   e.textContent="LABEL";
   e.dataset.type="label";
   e.dataset.font=1;
-  e.dataset.tx="CMD";
+  e.dataset.tx="";
   gen();
 }
 
@@ -215,15 +234,21 @@ function del(){
 }
 
 /* ---------- CANVAS BG ---------- */
-canvasBgPicker.oninput = () => {
-  canvas.style.backgroundColor = canvasBgPicker.value;
+canvasBgPicker.oninput=()=>{
+  canvas.style.backgroundColor=canvasBgPicker.value;
   gen();
 }
 
 /* ---------- CODE GEN ---------- */
 function gen(){
   let bg=rgb(canvas.style.backgroundColor).slice(1).toUpperCase();
-  let out=[`clear(0x${bg})`];
+  let out=[];
+
+  out.push(
+    orientSel.value=="portrait" ? "rotation(0)" : "rotation(1)"
+  );
+
+  out.push(`clear(0x${bg})`);
 
   items.forEach(e=>{
     let x=parseInt(e.style.left),
@@ -232,7 +257,7 @@ function gen(){
         h=e.offsetHeight;
 
     let bgc=rgb(e.style.backgroundColor).slice(1).toUpperCase();
-    let fgc=rgb(e.style.color||"#ffffff").slice(1).toUpperCase();
+    let fgc=rgb(e.style.color||"#fff").slice(1).toUpperCase();
 
     if(e.dataset.type=="label")
       out.push(`label(${x},${y},${w},${h},0x${bgc},0x${fgc},${e.textContent},${e.dataset.font})`);
@@ -253,70 +278,45 @@ function gen(){
 
 /* ---------- WEB SERIAL ---------- */
 async function connectSerial(){
-  try{
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate:115200 });
-
-    writer = port.writable.getWriter();
-    reader = port.readable.getReader();
-    keepReading = true;
-
-    readLoop();
-    alert("ESP32 Connected");
-  }catch(e){ alert(e); }
+  port=await navigator.serial.requestPort();
+  await port.open({ baudRate:115200 });
+  writer=port.writable.getWriter();
+  reader=port.readable.getReader();
+  keepReading=true;
+  readLoop();
+  alert("ESP32 Connected");
 }
 
 async function disconnectSerial(){
-  try {
-    keepReading = false;
-
-    if(reader){
-      await reader.cancel();
-      reader.releaseLock();
-      reader = null;
-    }
-
-    if(writer){
-      writer.releaseLock();
-      writer = null;
-    }
-
-    if(port){
-      await port.close();
-      port = null;
-    }
-
-    alert("ESP32 Disconnected!");
-  } catch(e){
-    alert("Error disconnecting: " + e);
-  }
+  keepReading=false;
+  if(reader){ await reader.cancel(); reader.releaseLock(); }
+  if(writer) writer.releaseLock();
+  if(port) await port.close();
+  alert("Disconnected");
 }
 
 async function readLoop(){
-  const dec = new TextDecoder();
-  let buffer="";
-
+  const dec=new TextDecoder();
+  let buf="";
   while(keepReading){
-    const { value, done } = await reader.read();
+    const {value,done}=await reader.read();
     if(done) break;
-    buffer += dec.decode(value);
-
-    let lines = buffer.split("\n");
-    buffer = lines.pop();
-
+    buf+=dec.decode(value);
+    let lines=buf.split("\n");
+    buf=lines.pop();
     lines.forEach(l=>{
-      rxBox.value += l.trim() + "\n";
-      rxBox.scrollTop = rxBox.scrollHeight;
+      rxBox.value+=l+"\n";
+      rxBox.scrollTop=rxBox.scrollHeight;
     });
   }
 }
 
 async function sendSerial(){
-  if(!writer){ alert("Not connected"); return; }
-  const enc = new TextEncoder();
+  if(!writer) return alert("Not connected");
+  const enc=new TextEncoder();
   for(let l of codeBox.value.split("\n")){
-    await writer.write(enc.encode(l + "\n"));
-    await new Promise(r=>setTimeout(r,50));
+    await writer.write(enc.encode(l+"\n"));
+    await new Promise(r=>setTimeout(r,40));
   }
 }
 </script>
