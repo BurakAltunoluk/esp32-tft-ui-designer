@@ -1,3 +1,9 @@
+Skip to content
+Chat history
+
+
+You said:
+selam sana projemi tanitmak istiyorum bu web tarafi ve githupta sakliyorum ve oradan link ile acip kullanabiliyorum 
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -150,11 +156,11 @@ function baseEl(style){
 }
 
 function addLabel(){
-  let e=baseEl(`
+  let e=baseEl(
     left:10px;top:10px;width:160px;height:48px;
     background:black;color:white;
     display:flex;align-items:center;justify-content:center;
-    border-radius:8px`);
+    border-radius:8px);
   e.textContent="LABEL";
   e.dataset.type="label";
   e.dataset.font=1;
@@ -163,11 +169,11 @@ function addLabel(){
 }
 
 function addButton(){
-  let e=baseEl(`
+  let e=baseEl(
     left:10px;top:70px;width:160px;height:48px;
     background:black;color:white;
     display:flex;align-items:center;justify-content:center;
-    border-radius:8px`);
+    border-radius:8px);
   e.textContent="BUTTON";
   e.dataset.type="button";
   e.dataset.font=1;
@@ -176,9 +182,9 @@ function addButton(){
 }
 
 function addLine(){
-  let e=baseEl(`
+  let e=baseEl(
     left:20px;top:150px;width:100px;height:3px;
-    background:yellow;border:none`);
+    background:yellow;border:none);
   e.dataset.type="line";
   e.dataset.dir="h";
   gen();
@@ -256,7 +262,7 @@ function gen(){
     orientSel.value=="portrait" ? "rotation(0)" : "rotation(1)"
   );
 
-  out.push(`clear(0x${bg})`);
+  out.push(clear(0x${bg}));
 
   items.forEach(e=>{
     let x=parseInt(e.style.left),
@@ -268,16 +274,16 @@ function gen(){
     let fgc=rgb(e.style.color||"#fff").slice(1).toUpperCase();
 
     if(e.dataset.type=="label")
-      out.push(`label(${x},${y},${w},${h},0x${bgc},0x${fgc},${e.textContent},${e.dataset.font})`);
+      out.push(label(${x},${y},${w},${h},0x${bgc},0x${fgc},${e.textContent},${e.dataset.font}));
 
     if(e.dataset.type=="button")
-      out.push(`button(${x},${y},${w},${h},0x${bgc},0x${fgc},${e.textContent},${e.dataset.tx},${e.dataset.font})`);
+      out.push(button(${x},${y},${w},${h},0x${bgc},0x${fgc},${e.textContent},${e.dataset.tx},${e.dataset.font}));
 
     if(e.dataset.type=="line"){
       if(e.dataset.dir=="h")
-        out.push(`line(${x},${y},${x+w},${y},0x${bgc},${h})`);
+        out.push(line(${x},${y},${x+w},${y},0x${bgc},${h}));
       else
-        out.push(`line(${x},${y},${x},${y+h},0x${bgc},${w})`);
+        out.push(line(${x},${y},${x},${y+h},0x${bgc},${w}));
     }
   });
 
@@ -330,3 +336,1892 @@ async function sendSerial(){
 </script>
 </body>
 </html>
+ChatGPT said:
+Selam Burak — projeyi anladım: tarayıcıda sürükle-bırak ile UI çiziyorsun, sonra da Web Serial (navigator.serial) ile ESP32’ye satır satır komut gönderip ekranda aynı arayüzü çizdiriyorsun. Mantık çok temiz: web tarafı “designer + code generator”, ESP32 tarafı da “komut yorumlayıcı + TFT renderer”.
+
+Aşağıya hem projenin şu an nasıl çalıştığını net özetleyeyim, hem de birkaç kritik iyileştirme bırakayım (özellikle GitHub Pages’te çalıştırma, hata/uyumluluk, komut formatı, güvenli gönderim vs.)
+
+Proje akışı (senin koduna göre)
+1) Canvas tarafı (sol panel)
+#canvas aslında bir “sahte TFT ekran” gibi çalışıyor.
+
+addLabel / addButton / addLine ile içine div elemanları ekliyorsun.
+
+Her elemanın:
+
+style.left/top/width/height → konum ve boyut
+
+dataset.type → label/button/line
+
+dataset.font, dataset.tx → ESP32’ye gönderilecek parametreler
+
+drag() fonksiyonu ile mouse sürükleme yapınca konum güncelleniyor ve gen() tekrar çalışıyor.
+
+2) Properties panel (sağ panel)
+Seçili element sel ile takip ediliyor.
+
+loadProps() seçilen elementin bilgilerini input’lara basıyor.
+
+Input’lar değişince apply() ile elemanın style/dataset alanları güncelleniyor.
+
+Her değişiklik gen() çağırıyor.
+
+3) Code generator (gen)
+gen() her şeyi bir “komut listesi”ne çeviriyor:
+
+Önce:
+
+rotation(0) / rotation(1)
+
+clear(0xXXXXXX)
+
+Sonra her eleman için:
+
+label → label(x,y,w,h,bg,fg,text,font)
+
+button → button(x,y,w,h,bg,fg,text,tx,font)
+
+line → line(x1,y1,x2,y2,color,thickness)
+
+Ve bu komutları textarea#code içine yazıyor.
+
+4) Web Serial ile ESP32’ye gönderim
+connectSerial() → port seçtiriyor, 115200 açıyor, reader/writer alıyor.
+
+readLoop() → ESP32’den gelen satırları RX monitöre basıyor.
+
+sendSerial() → code satır satır gönderiyor, her satır arası 40ms bekliyor.
+
+Bu sistemin güçlü tarafları
+ESP32 tarafını yormuyorsun: UI edit + layout web’de, ESP32 sadece çiziyor.
+
+Komut dili yaklaşımı çok doğru: yarın öbür gün “slider, image, icon” eklemek kolay.
+
+Serial monitor eklemen harika: debug/ack sistemine çok uygun.
+
+Dikkat edilmesi gereken 6 kritik nokta (hepsi sende şu an “gizli bug” olarak duruyor)
+1) GitHub Pages ve Web Serial gerçeği
+Web Serial yalnızca HTTPS veya localhost üzerinde çalışıyor.
+GitHub Pages HTTPS olduğu için çalışır, ama:
+
+Safari’de yok, Firefox’ta yok → Chrome/Edge şart.
+
+Kullanıcı “Connect” butonuna tıklamadan port seçtiremezsin (doğru yapmışsın).
+
+2) rgb() fonksiyonun hex değil, tarayıcı “normalize” ediyor
+Sen rgb(c) ile ctx.fillStyle=c; return ctx.fillStyle; diyorsun.
+Bu bazen:
+
+#00ff00 döndürür,
+
+bazen rgb(0, 255, 0) döndürür.
+Sonra slice(1) yapınca rgb(… patlar.
+
+Bunu bazı tarayıcılarda çok net görürsün. En sağlam çözüm:
+
+r,g,b’yi alıp kesin #RRGGBB üretmek.
+
+3) Komutlarda text ve tx “tırnaksız”
+Şu an:
+
+label(..., ${e.textContent}, ...)
+Bu üretimde:
+
+LABEL tırnaksız gidiyor → ESP32 parser “string” bekliyorsa zorlanır.
+
+Metinde boşluk/virgül/parantez olursa komut kırılır.
+
+En güvenlisi:
+
+Text ve tx’leri "..." şeklinde gönderip
+
+İçeride \" kaçışlamak.
+
+4) parseInt(e.style.left) bazen NaN olabilir
+Eğer elemente left/top hiç set edilmezse (ya da browser bir an boş bırakırsa) NaN döner.
+Sen baseEl’de left/top veriyorsun, ama ileride “snap / align / reset” eklersen bu patlar.
+İyi pratik: || 0 fallback.
+
+5) ESP32’ye satır satır kör göndermek yerine ACK sistemi
+40ms delay bazen yetmez, bazen gereksiz yavaşlatır.
+En sağlam yöntem:
+
+Her komut sonrası ESP32 OK\n döndürsün.
+
+Web tarafı bir sonraki komutu “OK gelince” yollasın.
+Bu şekilde:
+
+buffer taşması olmaz,
+
+hız otomatik optimum olur.
+
+6) document.onmousemove global kaldığı için bazen “takılı kalır”
+Mouse leave / iframe / focus kaybında sürükleme takılı kalabilir.
+Bunu addEventListener + pointerdown/pointermove/pointerup ile daha stabil yaparsın.
+
+En hızlı geliştirme önerisi (projenin seviyesini bir anda yükseltir)
+Ben olsam 3 şey eklerdim:
+
+Komut formatını JSON Lines yap
+Örn:
+
+{"cmd":"label","x":10,"y":10,"w":160,"h":48,"bg":"#000000","fg":"#ffffff","text":"LABEL","font":1}
+Parser çok rahatlar,
+
+string kaçış derdi azalır,
+
+gelecekte “image/base64/icon id” gibi şeyleri taşımak kolaylaşır.
+
+Export / Import (Save Layout)
+
+“Export JSON” butonu → tüm items dataset + style bilgilerini indir.
+
+“Import JSON” → layout’u geri yükle.
+Bu senin projeyi “gerçek ürün” yapar.
+
+Snap-to-grid ve hizalama
+
+5px grid, align left/center/right
+
+UX inanılmaz artar.
+
+İstersen bir sonraki adım: ESP32 tarafı protokolünü sağlamlaştıralım
+Senin web kodu “komut dili” üretiyor. Ben de sana:
+
+ESP32 tarafında satır okuyup parse eden
+
+label/button/line/clear/rotation çizen
+
+her komut sonrası OK dönen
+örnek bir “parser + dispatcher” şablonu çıkarabilirim.
+
+Bana sadece şunu söylemen yeter:
+
+TFT kütüphanen ne? TFT_eSPI mi, LovyanGFX mi?
+
+Ekran sürücü: ST7789 / ILI9341 vs. (senin kartta hangisi?)
+
+İstersen ayrıca: “Button’a tıklanınca ESP32’ye tx göndermek” (dokunmatik varsa) veya “ESP32’den gelen state’e göre web’de highlight” gibi iki yönlü hale de getiririz.
+
+You said:
+buda esp32 nin icinde ki kod 
+/*
+ESP32 TFT UI Client
+- Bluetooth üzerinden komut alır
+- Dokunmatik ekran ile butonlara basılabilir
+- Gelen komutları seri monitöre yazdırır
+*/
+
+#include <Arduino_GFX_Library.h>
+#include <XPT2046_Touchscreen.h>
+#include <SPI.h>
+
+#include "Fonts/FreeSans9pt7b.h"
+#include "Fonts/FreeSans12pt7b.h"
+#include "Fonts/FreeSans18pt7b.h"
+#include "Fonts/FreeSansBold9pt7b.h"
+
+#include "Fonts/FreeMonoOblique24pt7b.h"
+#include "Fonts/FreeSans24pt7b.h"
+#include "Fonts/FreeSansOblique12pt7b.h"
+#include "Fonts/FreeSerifBold24pt7b.h"
+#include "Fonts/TomThumb.h"
+#include "Fonts/Tiny3x3a2pt7b.h"
+#include "Fonts/Picopixel.h"
+#include "Fonts/Org_01.h"
+
+#include "BluetoothSerial.h"
+
+/* ===================== BLUETOOTH ===================== */
+BluetoothSerial SerialBT;
+uint8_t serverAddress[6] = {0x00, 0x4B, 0x12, 0xEE, 0x4E, 0x12};
+
+/* ===================== TFT ===================== */
+#define TFT_CS   15
+#define TFT_DC   2
+#define TFT_SCK  14
+#define TFT_MOSI 13
+#define TFT_MISO 12
+#define TFT_RST  -1
+#define TFT_BL   21
+#define BACKLIGHT_ON() digitalWrite(TFT_BL, HIGH)
+
+/* ===================== TOUCH ===================== */
+#define TOUCH_CS   33
+#define TOUCH_IRQ  36
+#define TOUCH_SCK  25
+#define TOUCH_MOSI 32
+#define TOUCH_MISO 39
+
+Arduino_DataBus *bus = new Arduino_ESP32SPI(
+  TFT_DC, TFT_CS, TFT_SCK, TFT_MOSI, TFT_MISO
+);
+Arduino_GFX *gfx = new Arduino_ILI9341(bus, TFT_RST, 1, false);
+XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
+
+/* ===================== FONT SETİ ===================== */
+const GFXfont* FONTS[] = {
+  &FreeSans9pt7b,
+  &FreeSans12pt7b,
+  &FreeSans18pt7b,
+  &FreeSansBold9pt7b,
+  &FreeMonoOblique24pt7b,
+  &FreeSans24pt7b,
+  &FreeSansOblique12pt7b,
+  &FreeSerifBold24pt7b,
+  &TomThumb,
+  &Tiny3x3a2pt7b,
+  &Picopixel,
+  &Org_01
+};
+
+/* ===================== UI ===================== */
+enum ElementType { LABEL, BUTTON };
+
+struct UIElement {
+  ElementType type;
+  int x, y, w, h;
+  uint16_t bg, tc;
+  String text, tx;
+  int fontID;
+};
+
+#define MAX_ELEMENTS 50
+UIElement elements[MAX_ELEMENTS];
+int elementCount = 0;
+
+/* ===================== HEX → RGB565 ===================== */
+uint16_t hexTo565(String hex) {
+  hex.replace("#", "");
+  if (hex.startsWith("0x")) hex = hex.substring(2);
+  long rgb = strtol(hex.c_str(), NULL, 16);
+  uint8_t r = (rgb >> 16) & 0xFF;
+  uint8_t g = (rgb >> 8) & 0xFF;
+  uint8_t b = rgb & 0xFF;
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}
+
+/* ===================== PARSE ===================== */
+String getArg(String &s, int index) {
+  int from = 0;
+  for (int i = 0; i < index; i++) {
+    from = s.indexOf(',', from) + 1;
+    if (from <= 0) return "";
+  }
+  int to = s.indexOf(',', from);
+  if (to == -1) to = s.length();
+  return s.substring(from, to);
+}
+
+/* ===================== ÇİZİM ===================== */
+void drawTextBox(UIElement &e, bool rounded) {
+  gfx->setFont(FONTS[e.fontID]);
+  gfx->setTextColor(e.tc);
+
+  if (rounded) {
+    gfx->fillRoundRect(e.x, e.y, e.w, e.h, 12, e.bg);
+    gfx->drawRoundRect(e.x, e.y, e.w, e.h, 12, e.tc);
+  } else {
+    gfx->fillRect(e.x, e.y, e.w, e.h, e.bg);
+  }
+
+  int16_t x1, y1;
+  uint16_t tw, th;
+  gfx->getTextBounds(e.text, 0, 0, &x1, &y1, &tw, &th);
+  gfx->setCursor(e.x + (e.w - tw) / 2, e.y + (e.h + th) / 2 - 2);
+  gfx->print(e.text);
+}
+
+void redrawAll() {
+  for (int i = 0; i < elementCount; i++)
+    drawTextBox(elements[i], elements[i].type == BUTTON);
+}
+
+void drawLineCmd(int x0,int y0,int x1,int y1,uint16_t c,int t) {
+  for (int i = 0; i < max(1, t); i++)
+    gfx->drawLine(x0, y0 + i, x1, y1 + i, c);
+}
+
+/* ===================== EKLE ===================== */
+void addLabel(int x,int y,int w,int h,String bg,String tc,String text,int fontID) {
+  elements[elementCount++] = { LABEL, x,y,w,h, hexTo565(bg), hexTo565(tc), text,"",fontID };
+  drawTextBox(elements[elementCount - 1], false);
+}
+
+void addButton(int x,int y,int w,int h,String bg,String tc,String text,String tx,int fontID) {
+  elements[elementCount++] = { BUTTON, x,y,w,h, hexTo565(bg), hexTo565(tc), text,tx,fontID };
+  drawTextBox(elements[elementCount - 1], true);
+}
+
+/* ===================== KOMUT ===================== */
+void processCommand(String cmd) {
+  cmd.trim();
+  if (!cmd.length()) return;
+
+  Serial.println("Processing: " + cmd);
+
+  if (cmd.startsWith("rotation(")) {
+    int r = cmd.substring(9, cmd.indexOf(')')).toInt();
+    gfx->setRotation(r);
+    ts.setRotation(r);
+    gfx->fillScreen(0x0000);
+    redrawAll();
+  }
+
+  else if (cmd.startsWith("clear(")) {
+    gfx->fillScreen(hexTo565(cmd.substring(6, cmd.indexOf(')'))));
+    elementCount = 0;
+  }
+
+  else if (cmd.startsWith("line(")) {
+    String p = cmd.substring(5, cmd.indexOf(')'));
+    drawLineCmd(
+      getArg(p,0).toInt(), getArg(p,1).toInt(),
+      getArg(p,2).toInt(), getArg(p,3).toInt(),
+      hexTo565(getArg(p,4)), getArg(p,5).toInt()
+    );
+  }
+
+  else if (cmd.startsWith("label(")) {
+    String p = cmd.substring(6, cmd.indexOf(')'));
+    addLabel(
+      getArg(p,0).toInt(), getArg(p,1).toInt(),
+      getArg(p,2).toInt(), getArg(p,3).toInt(),
+      getArg(p,4), getArg(p,5),
+      getArg(p,6), getArg(p,7).toInt()
+    );
+  }
+
+  else if (cmd.startsWith("button(")) {
+    String p = cmd.substring(7, cmd.indexOf(')'));
+    addButton(
+      getArg(p,0).toInt(), getArg(p,1).toInt(),
+      getArg(p,2).toInt(), getArg(p,3).toInt(),
+      getArg(p,4), getArg(p,5),
+      getArg(p,6), getArg(p,7),
+      getArg(p,8).toInt()
+    );
+  }
+}
+
+/* ===================== SETUP ===================== */
+void setup() {
+  Serial.begin(115200);
+  pinMode(TFT_BL, OUTPUT);
+  BACKLIGHT_ON();
+
+  gfx->begin();
+  gfx->setRotation(1);
+  ts.setRotation(1);
+  gfx->fillScreen(0x0000);
+
+  gfx->setFont(&FreeSans12pt7b);
+  gfx->setTextColor(0xFFFF);
+  gfx->setCursor(20, gfx->height() / 2);
+  gfx->print("Waiting for commands...");
+
+  SPI.begin(TOUCH_SCK, TOUCH_MISO, TOUCH_MOSI, TOUCH_CS);
+  ts.begin();
+
+  SerialBT.begin("ESP32_UI_CLIENT", true);
+  SerialBT.connect(serverAddress);
+
+  Serial.println("Setup complete.");
+}
+
+/* ===================== LOOP ===================== */
+void loop() {
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+    int px = map(p.x, 300, 3800, 0, gfx->width());
+    int py = map(p.y, 300, 3800, 0, gfx->height());
+
+    for (int i = 0; i < elementCount; i++) {
+      UIElement &e = elements[i];
+      if (e.type == BUTTON &&
+          px > e.x && px < e.x + e.w &&
+          py > e.y && py < e.y + e.h) {
+        SerialBT.println(e.tx);
+        Serial.println("Button pressed: " + e.tx);
+        delay(300);
+      }
+    }
+  }
+
+  while (SerialBT.available())
+    processCommand(SerialBT.readStringUntil('\n'));
+
+  while (Serial.available())
+    processCommand(Serial.readStringUntil('\n'));
+}
+ChatGPT said:
+Süper Burak — şimdi tablo tamamlandı: Web tarafın komut üretiyor, ESP32 tarafın hem BT (SerialBT) hem USB Serial üzerinden aynı komutları parse edip çiziyor, ayrıca dokunmatik ile button’lara basınca tx değerini Bluetooth’tan geri yolluyor. Mantık çok düzgün.
+
+Ama iki tarafta da “yarın sorun çıkaracak” birkaç kritik nokta var. En önemlileri: string parsing, elementCount taşması, clear sonrası çizim, web tarafının tırnaksız text/tx göndermesi, ve renk formatı.
+
+Aşağıda net şekilde, senin koduna göre “ne iyi / ne riskli / nasıl düzeltiriz” anlatıyorum.
+
+Şu haliyle ESP32 kodunun güçlü yanları
+Komut dili basit: rotation/clear/label/button/line
+
+UI elementlerini RAM’de tutup redrawAll() ile tekrar çizebiliyorsun
+
+Touch → button hit-test → SerialBT.println(e.tx) güzel
+
+Font tablolu sistem iyi (fontID ile seçmek pratik)
+
+1) En büyük risk: getArg() virgüle göre bölüyor (text/tx patlar)
+Şu an getArg() sadece virgül ile argüman ayırıyor. Bu demek ki:
+
+Label text’i “HELLO BURAK” (boşluk) sorun değil
+
+ama “HELLO, BURAK” (virgül) varsa parametreler kayar
+
+veya buton tx içinde virgül varsa aynı
+
+Ayrıca web tarafında label(..., ${e.textContent}, ...) tırnaksız gönderiyor.
+Bu da hem parse’ı kırar, hem de ileride text içinde özel karakter olunca zorlar.
+
+En sağlam çözüm: text ve tx’yi tırnaklı gönder ve ESP32’de tırnak içini tek argüman sayan parser yaz.
+
+Mini upgrade mantığı:
+
+Komut: label(10,10,160,48,0x000000,0xFFFFFF,"HELLO BURAK",1)
+
+Buton: button(...,"BUTTON","CMD:START",1)
+
+İstersen ben sana getArgQuoted() gibi, tırnak destekli bir parser fonksiyonu yazıp doğrudan senin koda entegre edeyim.
+
+2) MAX_ELEMENTS taşarsa bellek bozulur (şu an kontrol yok)
+addLabel/addButton içinde:
+
+elements[elementCount++] = ...
+Ama elementCount 50’yi geçerse dizi dışına yazar → random reset / garip çizimler.
+
+Mutlaka:
+
+if (elementCount >= MAX_ELEMENTS) return;
+veya “clear” yapıp tekrar başlat.
+
+3) clear() elementCount=0 yapıyor ama ekrandaki çizgileri/çizimleri resetliyor mu?
+Sen clear() yapınca ekranı dolduruyorsun ve elementCount=0 yapıyorsun. İyi.
+Ama line() çizdiğin şeyler elements içine kaydedilmiyor.
+Yani:
+
+rotation değişirse redrawAll() sadece label/button çizer
+
+line’lar kaybolur
+
+Web tarafında line var, ama ESP32’de line “stateless”.
+
+Çözüm seçenekleri:
+
+Line’ı da UIElement gibi sakla (enum’a LINE ekle)
+
+Ya da “rotation değişince web tekrar send yapsın” de (pratik ama zayıf)
+
+En iyisi: Line’ı da elements içine ekle
+
+4) hexTo565() gayet iyi ama web tarafı bazen rgb(0,0,0) gönderebilir
+ESP32 tarafı hex bekliyor: 0xAABBCC veya #AABBCC.
+Eğer web tarafında rgb(...) gibi bir string gelirse strtol çöp okur.
+
+Bu yüzden web tarafında kesin 0xRRGGBB üretmek şart.
+
+5) Bluetooth connect kısmı: “client mode” + sabit MAC
+Sen:
+
+SerialBT.begin("ESP32_UI_CLIENT", true);
+SerialBT.connect(serverAddress);
+Burada true → cihaz BT Classic’te master/client oluyor.
+Bu mantık doğru ama pratikte şu riskler var:
+
+karşı cihaz (server) yoksa connect takılı kalabilir / geç bağlanır
+
+MAC değişirse kopar
+
+web tarafın şu an Web Serial kullanıyor; BT üzerinden web direkt konuşamaz (tarayıcı BT Classic desteklemez)
+
+Yani şu an web->ESP32 en sorunsuz yol USB Serial.
+Bluetooth’u daha çok “ESP32->başka ESP32 / telefon app / PC app” için düşünmek doğru.
+
+6) Touch map kalibrasyonu sabit (300-3800)
+Bu değerler her ekranda farklı çıkabiliyor. Bir ekranda basma kayar.
+Buna bir kalibrasyon komutu iyi olur:
+
+touchcal(xmin,xmax,ymin,ymax) gibi
+veya config.
+
+7) Ufak ama önemli: readStringUntil('\n') bloklayabilir
+Serial ve BT’de:
+
+processCommand(SerialBT.readStringUntil('\n'));
+Bu fonksiyon timeout bekleyebilir (default ~1s) ve loop’u geciktirebilir.
+Daha sağlamı:
+
+satır buffer’ı toplayıp \n gelince işlemek (non-blocking)
+
+Ama “şimdilik basit” için sorun değil; UI hızlanınca fark edilir.
+
+Sana en mantıklı “hemen” iyileştirme paketi (en az değişiklikle)
+Web tarafında text/tx’yi tırnakla gönder:
+
+"LABEL" "CMD"
+
+ESP32 tarafında tırnak içini tek argüman sayan parser
+
+MAX_ELEMENTS guard
+
+Line’ı da elements içine kaydet
+
+Bunları yapınca sistemin “ürün gibi” stabil olur.
+
+İstersen ben direkt iki dosyaya da patch hazırlayayım
+Senin hedefin şu mu?
+
+Web Designer’dan “Send to ESP32” dediğinde tam layout her seferinde temiz çizilsin,
+
+rotation değişince line dahil her şey geri gelsin,
+
+text/tx içinde Türkçe/boşluk/virgül olsa bile bozulmasın,
+
+ESP32 her komuttan sonra OK dönsün ve web “OK bekleyip” göndermeye devam etsin (buffer taşmasın)
+
+Eğer “evet” dersen ben sana:
+
+web tarafı gen() çıktısını tırnaklı + escape’li
+
+ESP32 tarafı quoted parser + OK handshake
+şeklinde, kopyala-yapıştır hazır kodu çıkarırım.
+
+You said:
+senden istedigim web tarafinda bir button ekliyorum . yan panelden boyutunu ayarliyorum . sonra ayni buttona basinca button boyutlari degisiyor labeldada ayni line dada ayni neden sence
+ChatGPT said:
+Bu davranışın %90 ihtimalle “yan panel input’ları ile elementin üstüne tıklama olayı çakışıyor” ve senin drag() fonksiyonun sadece sürükleme için değil, tıklayınca da sel=el + loadProps() çalıştırdığı için “tıklar tıklamaz apply() tekrar devreye giriyor”. Yani sen elemente tıklayınca, paneldeki değerler bir an eski/boş/NaN gibi okunup tekrar elemana yazılıyor → boyut zıplıyor.
+
+Kodunda bunu tetikleyebilecek 3 net sebep var:
+
+1) drag() içinde e.offsetX / e.offsetY kullanıyorsun (en yaygın sebep)
+el.onmousedown = e=>{
+  sel=el; loadProps();
+  ox=e.offsetX; oy=e.offsetY;
+  document.onmousemove = ev=>{
+    el.style.left = ev.pageX - canvas.offsetLeft - ox + "px";
+    el.style.top  = ev.pageY - canvas.offsetTop  - oy + "px";
+    gen();
+  }
+}
+Problem:
+e.offsetX / offsetY tıklanan alt elemente göre değişir.
+
+Senin label/button div’lerinde:
+
+display:flex; align-items:center; justify-content:center;
+Ve içinde text var. Tıklayınca bazen olay div üzerinde, bazen text node / farklı render alanında hesaplanıyor; offset hesabı farklı çıkıyor. Mouse’u 1 piksel bile oynatsan, document.onmousemove devreye girip left/top yeniden hesaplanıyor → element “yer değiştiriyor”. Sen de bunu “boyut değişti” gibi algılıyorsun (çoğu zaman hem yer hem ölçü algısı karışır).
+
+✅ Çözüm:
+offsetX/offsetY yerine bounding rect ile gerçek farkı al:
+
+function drag(el){
+  let startX, startY, startLeft, startTop;
+
+  el.onmousedown = (e) => {
+    sel = el; loadProps();
+
+    const r = el.getBoundingClientRect();
+    const c = canvas.getBoundingClientRect();
+
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = r.left - c.left;
+    startTop  = r.top  - c.top;
+
+    document.onmousemove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      el.style.left = (startLeft + dx) + "px";
+      el.style.top  = (startTop  + dy) + "px";
+      gen();
+    };
+
+    document.onmouseup = () => document.onmousemove = null;
+  };
+}
+Bu tek başına çoğu “tıklayınca zıplıyor” sorununu bitirir.
+
+2) Input oninput=apply tüm alanlara bağlı ve “sel” değişince tetikleniyor
+Şu satır:
+
+["p_text","p_tx","p_font","p_w","p_h","p_bg","p_fg","p_len","p_dir","p_th","p_lc"]
+.forEach(id=>document.getElementById(id).oninput=apply);
+Bazı tarayıcılarda select / color input’lar programla value set edilince de input event ateşleyebiliyor (her yerde değil ama oluyor). Sen loadProps() yapınca panel input’ları set oluyor → apply() tetikleniyor → elementin width/height tekrar yazılıyor → bazen string/number dönüşümünden “1px kayma” bile boyut değişmiş gibi görünür.
+
+✅ Çözüm:
+loadProps() sırasında apply’ı “kilitle”:
+
+let loadingProps = false;
+
+function loadProps(){
+  if(!sel) return;
+  loadingProps = true;
+
+  // ... değerleri set et ...
+
+  loadingProps = false;
+}
+
+function apply(){
+  if(loadingProps) return;
+  if(!sel) return;
+  // ... normal apply ...
+}
+3) p_w.value / p_h.value boş kalırsa element “auto” olur, sonra tıklayınca geri yazılır
+Input type number bazen boş kalırsa "" döndürür.
+Sen:
+
+sel.style.width = p_w.value + "px";
+Eğer p_w.value=="" olursa "px" yazarsın → browser bunu geçersiz sayar → width “auto” olur. Sonra tekrar tıklayınca offsetWidth farklı çıkar → “boyut değişti” dersin.
+
+✅ Çözüm:
+Number input’ları daima sayı olarak zorla:
+
+const w = parseInt(p_w.value, 10);
+if(!Number.isFinite(w)) return; // ya da default ver
+sel.style.width = w + "px";
+En hızlı fix paketi (ben olsam böyle yaparım)
+drag()ı bounding-rect yöntemiyle değiştir.
+
+loadingProps kilidi ekle.
+
+apply’da width/height için parseInt + guard yap.
+
+Bunlar çözer.
+
+İstersen ben senin HTML dosyanın sadece değişmesi gereken kısımlarını (drag + loadProps/apply) “kopyala-yapıştır” hazır şekilde buraya bırakayım; sen direkt replace edersin.
+
+You said:
+tek parca olarak ver iyilestirdigin kodu deneyeyim
+ChatGPT said:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ESP32 TFT UI Designer</title>
+</head>
+
+<body style="margin:0">
+<div style="display:flex;height:100vh;font-family:Arial;background:#222;color:#fff">
+
+<!-- SOL PANEL -->
+<div style="width:460px;padding:10px">
+
+  <!-- ORIENTATION -->
+  Orientation:
+  <select id="orientation">
+    <option value="landscape" selected>Landscape (320x240)</option>
+    <option value="portrait">Portrait (240x320)</option>
+  </select>
+  <br><br>
+
+  <!-- CANVAS -->
+  <div id="canvas" style="
+    width:320px;height:240px;
+    background:#000;
+    border:3px solid #555;
+    position:relative;
+    margin-bottom:10px"></div>
+
+  Canvas BG:
+  <input id="canvas_bg" type="color" value="#000000"><br><br>
+
+  <button onclick="addLabel()">Add Label</button>
+  <button onclick="addButton()">Add Button</button>
+  <button onclick="addLine()">Add Line</button>
+  <br><br>
+
+  <button onclick="connectSerial()">🔌 Connect ESP32</button>
+  <button onclick="disconnectSerial()">❌ Disconnect</button>
+  <button onclick="sendSerial()">🚀 Send to ESP32</button>
+
+  <textarea id="code" style="width:100%;height:160px;margin-top:10px"></textarea>
+</div>
+
+<!-- PROPERTIES -->
+<div style="flex:1;padding:10px">
+  <h3>Properties</h3>
+
+  <div id="uiProps">
+    Text <input id="p_text"><br>
+    TX <input id="p_tx"><br>
+    Font
+    <select id="p_font">
+      <option value="0">FreeSans9pt</option>
+      <option value="1" selected>FreeSans12pt</option>
+      <option value="2">FreeSans18pt</option>
+      <option value="3">FreeSansBold</option>
+      <option value="4">FreeMonoOblique24pt</option>
+      <option value="5">FreeSans24pt</option>
+      <option value="6">FreeSansOblique12pt</option>
+      <option value="7">FreeSerifBold24pt</option>
+      <option value="8">TomThumb</option>
+      <option value="9">Tiny3x3a2pt</option>
+      <option value="10">Picopixel</option>
+      <option value="11">Org_01</option>
+    </select><br>
+    Width <input id="p_w" type="number" min="1" step="1"><br>
+    Height <input id="p_h" type="number" min="1" step="1"><br>
+    BG <input id="p_bg" type="color"><br>
+    FG <input id="p_fg" type="color"><br>
+  </div>
+
+  <div id="lineProps" style="display:none">
+    Length <input id="p_len" type="number" min="1" step="1"><br>
+    Direction
+    <select id="p_dir">
+      <option value="h">Horizontal</option>
+      <option value="v">Vertical</option>
+    </select><br>
+    Thickness <input id="p_th" type="number" min="1" step="1"><br>
+    Color <input id="p_lc" type="color"><br>
+  </div>
+
+  <br>
+  <button onclick="del()">🗑 Delete</button>
+
+  <h3>Serial Monitor (RX)</h3>
+  <textarea id="rx"
+    style="width:100%;height:180px;
+    background:#111;color:#0f0;
+    font-family:monospace"></textarea>
+</div>
+</div>
+
+<script>
+/* ---------- STATE ---------- */
+const canvas = document.getElementById("canvas");
+const codeBox = document.getElementById("code");
+const rxBox = document.getElementById("rx");
+const canvasBgPicker = document.getElementById("canvas_bg");
+const orientSel = document.getElementById("orientation");
+
+const uiProps = document.getElementById("uiProps");
+const lineProps = document.getElementById("lineProps");
+
+const p_text = document.getElementById("p_text");
+const p_tx   = document.getElementById("p_tx");
+const p_font = document.getElementById("p_font");
+const p_w    = document.getElementById("p_w");
+const p_h    = document.getElementById("p_h");
+const p_bg   = document.getElementById("p_bg");
+const p_fg   = document.getElementById("p_fg");
+
+const p_len  = document.getElementById("p_len");
+const p_dir  = document.getElementById("p_dir");
+const p_th   = document.getElementById("p_th");
+const p_lc   = document.getElementById("p_lc");
+
+let items = [], sel = null;
+let loadingProps = false;
+
+/* ---------- COLOR HELPERS (ALWAYS RETURN #RRGGBB) ---------- */
+function toHex2(n){ return n.toString(16).padStart(2, "0"); }
+
+function colorToHex(c){
+  // Accepts: #RRGGBB, rgb(r,g,b), named colors
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = c || "#000";
+  const s = ctx.fillStyle;
+
+  if (s.startsWith("#")) {
+    if (s.length === 4) {
+      // #rgb -> #rrggbb
+      return "#" + s[1]+s[1] + s[2]+s[2] + s[3]+s[3];
+    }
+    return s.slice(0, 7);
+  }
+
+  // rgb(...) or rgba(...)
+  const m = s.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    const r = Math.max(0, Math.min(255, parseInt(m[1],10)));
+    const g = Math.max(0, Math.min(255, parseInt(m[2],10)));
+    const b = Math.max(0, Math.min(255, parseInt(m[3],10)));
+    return "#" + toHex2(r) + toHex2(g) + toHex2(b);
+  }
+  return "#000000";
+}
+
+function hexTo0x(hex){
+  return "0x" + (hex || "#000000").replace("#","").toUpperCase();
+}
+
+/* ---------- ORIENTATION ---------- */
+orientSel.onchange = ()=>{
+  if(orientSel.value === "portrait"){
+    canvas.style.width = "240px";
+    canvas.style.height = "320px";
+  }else{
+    canvas.style.width = "320px";
+    canvas.style.height = "240px";
+  }
+  gen();
+};
+
+/* ---------- SERIAL ---------- */
+let port, writer, reader, keepReading = false;
+
+/* ---------- DRAG (FIXED: NO offsetX/offsetY JITTER) ---------- */
+function drag(el){
+  let startX, startY, startLeft, startTop;
+
+  el.onmousedown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    sel = el;
+    loadProps();
+
+    const elRect = el.getBoundingClientRect();
+    const cRect  = canvas.getBoundingClientRect();
+
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = elRect.left - cRect.left;
+    startTop  = elRect.top  - cRect.top;
+
+    document.onmousemove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      el.style.left = Math.round(startLeft + dx) + "px";
+      el.style.top  = Math.round(startTop  + dy) + "px";
+      gen();
+    };
+
+    document.onmouseup = () => {
+      document.onmousemove = null;
+      document.onmouseup = null;
+    };
+  };
+}
+
+/* ---------- ADD ---------- */
+function baseEl(style){
+  let e = document.createElement("div");
+  e.style = style;
+  e.style.position = "absolute";
+  e.style.border = "2px dashed #aaa";
+  e.style.boxSizing = "border-box"; // (stable sizing)
+  drag(e);
+  canvas.appendChild(e);
+  items.push(e);
+  return e;
+}
+
+function addLabel(){
+  let e = baseEl(`
+    left:10px;top:10px;width:160px;height:48px;
+    background:black;color:white;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:8px`);
+  e.textContent = "LABEL";
+  e.dataset.type = "label";
+  e.dataset.font = "1";
+  e.dataset.tx = "";
+  sel = e; loadProps();
+  gen();
+}
+
+function addButton(){
+  let e = baseEl(`
+    left:10px;top:70px;width:160px;height:48px;
+    background:black;color:white;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:8px`);
+  e.textContent = "BUTTON";
+  e.dataset.type = "button";
+  e.dataset.font = "1";
+  e.dataset.tx = "CMD";
+  sel = e; loadProps();
+  gen();
+}
+
+function addLine(){
+  let e = baseEl(`
+    left:20px;top:150px;width:100px;height:3px;
+    background:yellow;border:none`);
+  e.dataset.type = "line";
+  e.dataset.dir = "h";
+  sel = e; loadProps();
+  gen();
+}
+
+/* ---------- PROPS ---------- */
+function loadProps(){
+  if(!sel) return;
+
+  loadingProps = true;
+
+  const type = sel.dataset.type;
+
+  uiProps.style.display   = (type === "line") ? "none" : "block";
+  lineProps.style.display = (type === "line") ? "block" : "none";
+
+  if(type !== "line"){
+    p_text.value = sel.textContent || "";
+    p_tx.value   = sel.dataset.tx || "";
+    p_font.value = sel.dataset.font || "1";
+    p_w.value    = sel.getBoundingClientRect().width  | 0;
+    p_h.value    = sel.getBoundingClientRect().height | 0;
+
+    p_bg.value = colorToHex(sel.style.backgroundColor || "#000");
+    p_fg.value = colorToHex(sel.style.color || "#fff");
+  } else {
+    const w = sel.getBoundingClientRect().width  | 0;
+    const h = sel.getBoundingClientRect().height | 0;
+
+    p_dir.value = sel.dataset.dir || "h";
+    p_len.value = (p_dir.value === "h") ? w : h;
+    p_th.value  = (p_dir.value === "h") ? h : w;
+    p_lc.value  = colorToHex(sel.style.backgroundColor || "#FFFF00");
+  }
+
+  loadingProps = false;
+}
+
+function asInt(v, fallback){
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function apply(){
+  if(loadingProps) return;
+  if(!sel) return;
+
+  const type = sel.dataset.type;
+
+  if(type !== "line"){
+    sel.textContent = p_text.value ?? "";
+    sel.dataset.tx  = p_tx.value ?? "";
+    sel.dataset.font = String(asInt(p_font.value, 1));
+
+    const w = Math.max(1, asInt(p_w.value, sel.getBoundingClientRect().width  | 0));
+    const h = Math.max(1, asInt(p_h.value, sel.getBoundingClientRect().height | 0));
+
+    sel.style.width  = w + "px";
+    sel.style.height = h + "px";
+
+    sel.style.background = p_bg.value || "#000000";
+    sel.style.color      = p_fg.value || "#FFFFFF";
+  } else {
+    const dir = p_dir.value || "h";
+    sel.dataset.dir = dir;
+
+    const len = Math.max(1, asInt(p_len.value, 100));
+    const th  = Math.max(1, asInt(p_th.value, 3));
+
+    if(dir === "h"){
+      sel.style.width  = len + "px";
+      sel.style.height = th  + "px";
+    } else {
+      sel.style.height = len + "px";
+      sel.style.width  = th  + "px";
+    }
+
+    sel.style.background = p_lc.value || "#FFFF00";
+  }
+
+  gen();
+}
+
+["p_text","p_tx","p_font","p_w","p_h","p_bg","p_fg","p_len","p_dir","p_th","p_lc"]
+  .forEach(id => document.getElementById(id).addEventListener("input", apply));
+
+function del(){
+  if(!sel) return;
+  if(sel.parentElement === canvas) canvas.removeChild(sel);
+  items = items.filter(i => i !== sel);
+  sel = null;
+  gen();
+}
+
+/* ---------- CANVAS BG ---------- */
+canvasBgPicker.oninput = ()=>{
+  canvas.style.backgroundColor = canvasBgPicker.value;
+  gen();
+};
+
+/* ---------- CODE GEN (robust colors) ---------- */
+function gen(){
+  const bgHex = colorToHex(canvas.style.backgroundColor || "#000000");
+  let out = [];
+
+  out.push(orientSel.value === "portrait" ? "rotation(0)" : "rotation(1)");
+  out.push(`clear(${hexTo0x(bgHex)})`);
+
+  items.forEach(e=>{
+    const x = asInt(e.style.left, 0);
+    const y = asInt(e.style.top, 0);
+
+    const rect = e.getBoundingClientRect();
+    const w = rect.width  | 0;
+    const h = rect.height | 0;
+
+    const bgc = hexTo0x(colorToHex(e.style.backgroundColor || "#000000"));
+    const fgc = hexTo0x(colorToHex(e.style.color || "#ffffff"));
+
+    // NOTE: keeping your original protocol (no quotes).
+    // If you want safer strings later, we can add quotes+escaping and update ESP32 parser.
+    if(e.dataset.type === "label"){
+      out.push(`label(${x},${y},${w},${h},${bgc},${fgc},${e.textContent},${asInt(e.dataset.font,1)})`);
+    }
+
+    if(e.dataset.type === "button"){
+      out.push(`button(${x},${y},${w},${h},${bgc},${fgc},${e.textContent},${e.dataset.tx || ""},${asInt(e.dataset.font,1)})`);
+    }
+
+    if(e.dataset.type === "line"){
+      const dir = e.dataset.dir || "h";
+      if(dir === "h"){
+        out.push(`line(${x},${y},${x+w},${y},${bgc},${h})`);
+      }else{
+        out.push(`line(${x},${y},${x},${y+h},${bgc},${w})`);
+      }
+    }
+  });
+
+  codeBox.value = out.join("\n");
+}
+
+/* ---------- WEB SERIAL ---------- */
+async function connectSerial(){
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate:115200 });
+  writer = port.writable.getWriter();
+  reader = port.readable.getReader();
+  keepReading = true;
+  readLoop();
+  alert("ESP32 Connected");
+}
+
+async function disconnectSerial(){
+  keepReading = false;
+  if(reader){ await reader.cancel(); reader.releaseLock(); }
+  if(writer) writer.releaseLock();
+  if(port) await port.close();
+  alert("Disconnected");
+}
+
+async function readLoop(){
+  const dec = new TextDecoder();
+  let buf = "";
+  while(keepReading){
+    const {value,done} = await reader.read();
+    if(done) break;
+    buf += dec.decode(value);
+    let lines = buf.split("\n");
+    buf = lines.pop();
+    lines.forEach(l=>{
+      rxBox.value += l + "\n";
+      rxBox.scrollTop = rxBox.scrollHeight;
+    });
+  }
+}
+
+async function sendSerial(){
+  if(!writer) return alert("Not connected");
+  const enc = new TextEncoder();
+  for(let l of codeBox.value.split("\n")){
+    await writer.write(enc.encode(l + "\n"));
+    await new Promise(r=>setTimeout(r,40));
+  }
+}
+
+/* ---------- INIT ---------- */
+gen();
+</script>
+</body>
+</html>
+You said:
+tamam calisiyor . Simdide biraz renk duzen kat programa cok amator duruyor hic renk yok bisey yok .   Serial Monitor (RX) paneli ve kod ciktisi aldigimiz panelin ekranin en altina koy uzun uzadiya dikkat et digerlerini kapamasin uzerlerine cikmasin 
+ChatGPT said:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ESP32 TFT UI Designer</title>
+<style>
+  :root{
+    --bg0:#0b1020;
+    --bg1:#0f1730;
+    --bg2:#121c39;
+    --card:#0f1a33cc;
+    --card2:#0b1328cc;
+    --stroke:#243257;
+    --stroke2:#2e3c69;
+    --text:#e7ecff;
+    --muted:#aab4da;
+    --accent:#7c5cff;
+    --accent2:#25d8ff;
+    --good:#31d0aa;
+    --warn:#ffcc66;
+    --danger:#ff5c7a;
+    --shadow: 0 12px 40px rgba(0,0,0,.35);
+    --radius:16px;
+    --radius2:12px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    --dockH: 240px; /* bottom dock height */
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:var(--sans);
+    color:var(--text);
+    background:
+      radial-gradient(1200px 800px at 20% -10%, rgba(124,92,255,.35), transparent 55%),
+      radial-gradient(1000px 700px at 100% 10%, rgba(37,216,255,.22), transparent 55%),
+      radial-gradient(900px 600px at 40% 120%, rgba(49,208,170,.14), transparent 55%),
+      linear-gradient(180deg, var(--bg0), var(--bg1) 40%, var(--bg2));
+    overflow:hidden;
+  }
+
+  /* App layout: top workspace + bottom dock */
+  .app{
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    padding:14px;
+  }
+
+  .top{
+    flex:1;
+    min-height:0; /* important to allow internal scrolling */
+    display:grid;
+    grid-template-columns: 460px 1fr;
+    gap:12px;
+  }
+
+  .panel{
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    border:1px solid rgba(255,255,255,.08);
+    border-color: rgba(36,50,87,.9);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(8px);
+    overflow:hidden;
+    min-height:0;
+  }
+
+  .panel .hdr{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 14px;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    background: linear-gradient(180deg, rgba(255,255,255,.05), transparent);
+  }
+
+  .panel .hdr .title{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:700;
+    letter-spacing:.2px;
+  }
+
+  .badge{
+    font-size:12px;
+    padding:4px 10px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.10);
+    color: var(--muted);
+    background: rgba(0,0,0,.20);
+  }
+
+  .body{
+    padding:12px 14px;
+    overflow:auto;
+    height:100%;
+    min-height:0;
+  }
+
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .row + .row{ margin-top:10px; }
+
+  label.small{
+    font-size:12px;
+    color:var(--muted);
+    display:block;
+    margin-bottom:6px;
+  }
+
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    min-width: 160px;
+  }
+
+  select, input[type="number"], input[type="text"]{
+    width:100%;
+    padding:10px 10px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,.10);
+    border-color: rgba(36,50,87,.95);
+    background: rgba(0,0,0,.22);
+    color: var(--text);
+    outline:none;
+  }
+  input[type="color"]{
+    width:46px;
+    height:40px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,.10);
+    border-color: rgba(36,50,87,.95);
+    background: rgba(0,0,0,.22);
+    padding:4px;
+  }
+
+  select:focus, input:focus{
+    border-color: rgba(124,92,255,.9);
+    box-shadow: 0 0 0 3px rgba(124,92,255,.20);
+  }
+
+  .btns{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .btn{
+    cursor:pointer;
+    user-select:none;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,.10);
+    border-color: rgba(46,60,105,.95);
+    background: rgba(0,0,0,.22);
+    color: var(--text);
+    padding:10px 12px;
+    font-weight:600;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    transition: transform .06s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:hover{
+    background: rgba(255,255,255,.06);
+    border-color: rgba(124,92,255,.55);
+  }
+  .btn:active{ transform: translateY(1px); }
+
+  .btn.primary{
+    background: linear-gradient(135deg, rgba(124,92,255,.25), rgba(37,216,255,.10));
+    border-color: rgba(124,92,255,.65);
+  }
+  .btn.good{
+    background: linear-gradient(135deg, rgba(49,208,170,.22), rgba(37,216,255,.08));
+    border-color: rgba(49,208,170,.55);
+  }
+  .btn.danger{
+    background: linear-gradient(135deg, rgba(255,92,122,.18), rgba(124,92,255,.10));
+    border-color: rgba(255,92,122,.55);
+  }
+  .btn.ghost{
+    background: rgba(0,0,0,.16);
+  }
+
+  .hint{
+    margin-top:10px;
+    font-size:12px;
+    color: var(--muted);
+    line-height:1.4;
+  }
+
+  /* Canvas area */
+  .canvasWrap{
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+
+  #canvas{
+    background:#000;
+    border:2px solid rgba(255,255,255,.08);
+    border-color: rgba(46,60,105,.95);
+    border-radius: 18px;
+    position:relative;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 12px 30px rgba(0,0,0,.35);
+    overflow:hidden;
+  }
+
+  /* Bottom dock (code + serial) */
+  .dock{
+    height: var(--dockH);
+    min-height: 180px;
+    max-height: 40vh;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:12px;
+  }
+  .dock .panel{ min-height:0; }
+
+  textarea{
+    width:100%;
+    height:100%;
+    resize:none;
+    padding:12px 12px;
+    border-radius: 14px;
+    border:1px solid rgba(255,255,255,.10);
+    border-color: rgba(36,50,87,.95);
+    background: rgba(0,0,0,.30);
+    color: var(--text);
+    outline:none;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  textarea:focus{
+    border-color: rgba(37,216,255,.75);
+    box-shadow: 0 0 0 3px rgba(37,216,255,.18);
+  }
+
+  .monoTag{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(231,236,255,.86);
+  }
+
+  /* Make the right panel scroll if needed without covering dock */
+  .panel .body{ max-height: 100%; }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- TOP WORKSPACE -->
+  <div class="top">
+
+    <!-- LEFT -->
+    <div class="panel">
+      <div class="hdr">
+        <div class="title">🎛️ Designer <span class="badge">Drag & Drop</span></div>
+        <div class="badge">ESP32 TFT</div>
+      </div>
+
+      <div class="body">
+        <div class="row">
+          <div class="field" style="min-width:260px;">
+            <label class="small">Orientation</label>
+            <select id="orientation">
+              <option value="landscape" selected>Landscape (320x240)</option>
+              <option value="portrait">Portrait (240x320)</option>
+            </select>
+          </div>
+
+          <div class="field" style="min-width:140px;">
+            <label class="small">Canvas BG</label>
+            <input id="canvas_bg" type="color" value="#000000">
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="canvasWrap">
+            <div id="canvas" style="width:320px;height:240px;"></div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;min-width:160px;">
+              <div class="btns">
+                <button class="btn ghost" onclick="addLabel()">➕ Label</button>
+                <button class="btn ghost" onclick="addButton()">➕ Button</button>
+                <button class="btn ghost" onclick="addLine()">➕ Line</button>
+              </div>
+
+              <div class="btns">
+                <button class="btn good" onclick="connectSerial()">🔌 Connect</button>
+                <button class="btn danger" onclick="disconnectSerial()">❌ Disconnect</button>
+                <button class="btn primary" onclick="sendSerial()">🚀 Send</button>
+              </div>
+
+              <div class="hint">
+                💡 İpucu: Element seçmek için tıkla, sürüklemek için basılı tutup taşı.<br>
+                Alt paneldeki <span class="monoTag">CODE</span> ve <span class="monoTag">RX</span> alanları sabit, hiçbir zaman üstüne binmez.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="panel">
+      <div class="hdr">
+        <div class="title">🧩 Properties <span class="badge">Selected</span></div>
+        <div class="badge">Live Update</div>
+      </div>
+
+      <div class="body">
+        <div id="uiProps">
+          <div class="row">
+            <div class="field" style="min-width:260px;flex:1;">
+              <label class="small">Text</label>
+              <input id="p_text" type="text" placeholder="LABEL">
+            </div>
+            <div class="field" style="min-width:220px;flex:1;">
+              <label class="small">TX</label>
+              <input id="p_tx" type="text" placeholder="CMD">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field" style="min-width:260px;flex:1;">
+              <label class="small">Font</label>
+              <select id="p_font">
+                <option value="0">FreeSans9pt</option>
+                <option value="1" selected>FreeSans12pt</option>
+                <option value="2">FreeSans18pt</option>
+                <option value="3">FreeSansBold</option>
+                <option value="4">FreeMonoOblique24pt</option>
+                <option value="5">FreeSans24pt</option>
+                <option value="6">FreeSansOblique12pt</option>
+                <option value="7">FreeSerifBold24pt</option>
+                <option value="8">TomThumb</option>
+                <option value="9">Tiny3x3a2pt</option>
+                <option value="10">Picopixel</option>
+                <option value="11">Org_01</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label class="small">Width</label>
+              <input id="p_w" type="number" min="1" step="1">
+            </div>
+            <div class="field">
+              <label class="small">Height</label>
+              <input id="p_h" type="number" min="1" step="1">
+            </div>
+            <div class="field">
+              <label class="small">BG</label>
+              <input id="p_bg" type="color" value="#000000">
+            </div>
+            <div class="field">
+              <label class="small">FG</label>
+              <input id="p_fg" type="color" value="#ffffff">
+            </div>
+          </div>
+        </div>
+
+        <div id="lineProps" style="display:none">
+          <div class="row">
+            <div class="field">
+              <label class="small">Length</label>
+              <input id="p_len" type="number" min="1" step="1">
+            </div>
+            <div class="field">
+              <label class="small">Direction</label>
+              <select id="p_dir">
+                <option value="h">Horizontal</option>
+                <option value="v">Vertical</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="small">Thickness</label>
+              <input id="p_th" type="number" min="1" step="1">
+            </div>
+            <div class="field">
+              <label class="small">Color</label>
+              <input id="p_lc" type="color" value="#ffff00">
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
+          <button class="btn danger" onclick="del()">🗑 Delete Selected</button>
+        </div>
+
+        <div class="hint">
+          Not: Line elementleri rotation sonrası kaybolmasın istiyorsan ESP32 tarafında line’ları da element listesinde saklamak gerekir (istersen onu da ekleriz).
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM DOCK: CODE + SERIAL RX -->
+  <div class="dock">
+    <div class="panel">
+      <div class="hdr">
+        <div class="title">📄 Code Output <span class="badge">TX → ESP32</span></div>
+        <div class="badge monoTag">CODE</div>
+      </div>
+      <div class="body" style="padding:10px;">
+        <textarea id="code" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="hdr">
+        <div class="title">🖥️ Serial Monitor <span class="badge">RX</span></div>
+        <div class="badge monoTag">RX</div>
+      </div>
+      <div class="body" style="padding:10px;">
+        <textarea id="rx" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- STATE ---------- */
+const canvas = document.getElementById("canvas");
+const codeBox = document.getElementById("code");
+const rxBox = document.getElementById("rx");
+const canvasBgPicker = document.getElementById("canvas_bg");
+const orientSel = document.getElementById("orientation");
+
+const uiProps = document.getElementById("uiProps");
+const lineProps = document.getElementById("lineProps");
+
+const p_text = document.getElementById("p_text");
+const p_tx   = document.getElementById("p_tx");
+const p_font = document.getElementById("p_font");
+const p_w    = document.getElementById("p_w");
+const p_h    = document.getElementById("p_h");
+const p_bg   = document.getElementById("p_bg");
+const p_fg   = document.getElementById("p_fg");
+
+const p_len  = document.getElementById("p_len");
+const p_dir  = document.getElementById("p_dir");
+const p_th   = document.getElementById("p_th");
+const p_lc   = document.getElementById("p_lc");
+
+let items = [], sel = null;
+let loadingProps = false;
+
+/* ---------- COLOR HELPERS (ALWAYS RETURN #RRGGBB) ---------- */
+function toHex2(n){ return n.toString(16).padStart(2, "0"); }
+function colorToHex(c){
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = c || "#000";
+  const s = ctx.fillStyle;
+
+  if (s.startsWith("#")) {
+    if (s.length === 4) return "#" + s[1]+s[1] + s[2]+s[2] + s[3]+s[3];
+    return s.slice(0, 7);
+  }
+  const m = s.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    const r = Math.max(0, Math.min(255, parseInt(m[1],10)));
+    const g = Math.max(0, Math.min(255, parseInt(m[2],10)));
+    const b = Math.max(0, Math.min(255, parseInt(m[3],10)));
+    return "#" + toHex2(r) + toHex2(g) + toHex2(b);
+  }
+  return "#000000";
+}
+function hexTo0x(hex){
+  return "0x" + (hex || "#000000").replace("#","").toUpperCase();
+}
+
+/* ---------- ORIENTATION ---------- */
+orientSel.onchange = ()=>{
+  if(orientSel.value === "portrait"){
+    canvas.style.width = "240px";
+    canvas.style.height = "320px";
+  }else{
+    canvas.style.width = "320px";
+    canvas.style.height = "240px";
+  }
+  gen();
+};
+
+/* ---------- SERIAL ---------- */
+let port, writer, reader, keepReading = false;
+
+/* ---------- DRAG (STABLE) ---------- */
+function drag(el){
+  let startX, startY, startLeft, startTop;
+
+  el.onmousedown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    sel = el;
+    loadProps();
+
+    const elRect = el.getBoundingClientRect();
+    const cRect  = canvas.getBoundingClientRect();
+
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = elRect.left - cRect.left;
+    startTop  = elRect.top  - cRect.top;
+
+    document.onmousemove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      el.style.left = Math.round(startLeft + dx) + "px";
+      el.style.top  = Math.round(startTop  + dy) + "px";
+      gen();
+    };
+
+    document.onmouseup = () => {
+      document.onmousemove = null;
+      document.onmouseup = null;
+    };
+  };
+}
+
+/* ---------- ADD ---------- */
+function baseEl(style){
+  let e = document.createElement("div");
+  e.style = style;
+  e.style.position = "absolute";
+  e.style.border = "2px dashed rgba(231,236,255,.55)";
+  e.style.boxSizing = "border-box";
+  e.style.backdropFilter = "blur(4px)";
+  e.style.boxShadow = "0 10px 22px rgba(0,0,0,.25)";
+  drag(e);
+  canvas.appendChild(e);
+  items.push(e);
+  return e;
+}
+
+function addLabel(){
+  let e = baseEl(`
+    left:10px;top:10px;width:160px;height:48px;
+    background:rgba(0,0,0,.35);color:white;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:14px`);
+  e.textContent = "LABEL";
+  e.dataset.type = "label";
+  e.dataset.font = "1";
+  e.dataset.tx = "";
+  sel = e; loadProps();
+  gen();
+}
+
+function addButton(){
+  let e = baseEl(`
+    left:10px;top:70px;width:160px;height:48px;
+    background:rgba(124,92,255,.22);color:white;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:16px`);
+  e.textContent = "BUTTON";
+  e.dataset.type = "button";
+  e.dataset.font = "1";
+  e.dataset.tx = "CMD";
+  sel = e; loadProps();
+  gen();
+}
+
+function addLine(){
+  let e = baseEl(`
+    left:20px;top:150px;width:100px;height:3px;
+    background:#FFFF00;border:none;border-radius:99px`);
+  e.dataset.type = "line";
+  e.dataset.dir = "h";
+  // line shouldn't have dashed border
+  e.style.border = "none";
+  sel = e; loadProps();
+  gen();
+}
+
+/* ---------- PROPS ---------- */
+function asInt(v, fallback){
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function loadProps(){
+  if(!sel) return;
+
+  loadingProps = true;
+
+  const type = sel.dataset.type;
+  uiProps.style.display   = (type === "line") ? "none" : "block";
+  lineProps.style.display = (type === "line") ? "block" : "none";
+
+  if(type !== "line"){
+    p_text.value = sel.textContent || "";
+    p_tx.value   = sel.dataset.tx || "";
+    p_font.value = sel.dataset.font || "1";
+
+    const r = sel.getBoundingClientRect();
+    p_w.value = r.width  | 0;
+    p_h.value = r.height | 0;
+
+    p_bg.value = colorToHex(sel.style.backgroundColor || "#000");
+    p_fg.value = colorToHex(sel.style.color || "#fff");
+  } else {
+    const r = sel.getBoundingClientRect();
+    const w = r.width  | 0;
+    const h = r.height | 0;
+
+    p_dir.value = sel.dataset.dir || "h";
+    p_len.value = (p_dir.value === "h") ? w : h;
+    p_th.value  = (p_dir.value === "h") ? h : w;
+    p_lc.value  = colorToHex(sel.style.backgroundColor || "#FFFF00");
+  }
+
+  loadingProps = false;
+}
+
+function apply(){
+  if(loadingProps) return;
+  if(!sel) return;
+
+  const type = sel.dataset.type;
+
+  if(type !== "line"){
+    sel.textContent = p_text.value ?? "";
+    sel.dataset.tx  = p_tx.value ?? "";
+    sel.dataset.font = String(asInt(p_font.value, 1));
+
+    const w = Math.max(1, asInt(p_w.value, sel.getBoundingClientRect().width  | 0));
+    const h = Math.max(1, asInt(p_h.value, sel.getBoundingClientRect().height | 0));
+    sel.style.width  = w + "px";
+    sel.style.height = h + "px";
+
+    sel.style.background = p_bg.value || "#000000";
+    sel.style.color      = p_fg.value || "#FFFFFF";
+  } else {
+    const dir = p_dir.value || "h";
+    sel.dataset.dir = dir;
+
+    const len = Math.max(1, asInt(p_len.value, 100));
+    const th  = Math.max(1, asInt(p_th.value, 3));
+
+    if(dir === "h"){
+      sel.style.width  = len + "px";
+      sel.style.height = th  + "px";
+    } else {
+      sel.style.height = len + "px";
+      sel.style.width  = th  + "px";
+    }
+
+    sel.style.background = p_lc.value || "#FFFF00";
+  }
+
+  gen();
+}
+
+["p_text","p_tx","p_font","p_w","p_h","p_bg","p_fg","p_len","p_dir","p_th","p_lc"]
+  .forEach(id => document.getElementById(id).addEventListener("input", apply));
+
+function del(){
+  if(!sel) return;
+  if(sel.parentElement === canvas) canvas.removeChild(sel);
+  items = items.filter(i => i !== sel);
+  sel = null;
+  gen();
+}
+
+/* ---------- CANVAS BG ---------- */
+canvasBgPicker.oninput = ()=>{
+  canvas.style.backgroundColor = canvasBgPicker.value;
+  gen();
+};
+
+/* ---------- CODE GEN ---------- */
+function gen(){
+  const bgHex = colorToHex(canvas.style.backgroundColor || "#000000");
+  let out = [];
+
+  out.push(orientSel.value === "portrait" ? "rotation(0)" : "rotation(1)");
+  out.push(`clear(${hexTo0x(bgHex)})`);
+
+  items.forEach(e=>{
+    const x = asInt(e.style.left, 0);
+    const y = asInt(e.style.top, 0);
+
+    const rect = e.getBoundingClientRect();
+    const w = rect.width  | 0;
+    const h = rect.height | 0;
+
+    const bgc = hexTo0x(colorToHex(e.style.backgroundColor || "#000000"));
+    const fgc = hexTo0x(colorToHex(e.style.color || "#ffffff"));
+
+    if(e.dataset.type === "label"){
+      out.push(`label(${x},${y},${w},${h},${bgc},${fgc},${e.textContent},${asInt(e.dataset.font,1)})`);
+    }
+
+    if(e.dataset.type === "button"){
+      out.push(`button(${x},${y},${w},${h},${bgc},${fgc},${e.textContent},${e.dataset.tx || ""},${asInt(e.dataset.font,1)})`);
+    }
+
+    if(e.dataset.type === "line"){
+      const dir = e.dataset.dir || "h";
+      if(dir === "h"){
+        out.push(`line(${x},${y},${x+w},${y},${bgc},${h})`);
+      }else{
+        out.push(`line(${x},${y},${x},${y+h},${bgc},${w})`);
+      }
+    }
+  });
+
+  codeBox.value = out.join("\n");
+}
+
+/* ---------- WEB SERIAL ---------- */
+async function connectSerial(){
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate:115200 });
+  writer = port.writable.getWriter();
+  reader = port.readable.getReader();
+  keepReading = true;
+  readLoop();
+  alert("ESP32 Connected");
+}
+
+async function disconnectSerial(){
+  keepReading = false;
+  if(reader){ await reader.cancel(); reader.releaseLock(); }
+  if(writer) writer.releaseLock();
+  if(port) await port.close();
+  alert("Disconnected");
+}
+
+async function readLoop(){
+  const dec = new TextDecoder();
+  let buf = "";
+  while(keepReading){
+    const {value,done} = await reader.read();
+    if(done) break;
+    buf += dec.decode(value);
+    let lines = buf.split("\n");
+    buf = lines.pop();
+    lines.forEach(l=>{
+      rxBox.value += l + "\n";
+      rxBox.scrollTop = rxBox.scrollHeight;
+    });
+  }
+}
+
+async function sendSerial(){
+  if(!writer) return alert("Not connected");
+  const enc = new TextEncoder();
+  for(let l of codeBox.value.split("\n")){
+    await writer.write(enc.encode(l + "\n"));
+    await new Promise(r=>setTimeout(r,40));
+  }
+}
+
+/* ---------- INIT ---------- */
+gen();
+</script>
+</body>
+</html>
+
+
+No file chosenNo file chosen
+ChatGPT can make mistakes. Check important info. See Cookie Preferences.
