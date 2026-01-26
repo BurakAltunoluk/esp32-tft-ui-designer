@@ -138,14 +138,50 @@ void drawLineCmd(int x0, int y0, int x1, int y1, uint16_t c, int t) {
 void addLabel(int x, int y, int w, int h, String bg, String tc, String text, int fontID) {
   if (elementCount >= MAX_ELEMENTS) return;
   elements[elementCount++] = { LABEL, x, y, w, h, hexTo565(bg), hexTo565(tc), text, "", fontID };
+
+ 
+  elements[elementCount - 1].text.reserve(48);  // label yazısı için
+  elements[elementCount - 1].tx.reserve(16);    // (labelda boş ama sorun değil)
+
+  
   drawTextBox(elements[elementCount - 1], false);
 }
 
 void addButton(int x, int y, int w, int h, String bg, String tc, String text, String tx, int fontID) {
   if (elementCount >= MAX_ELEMENTS) return;
   elements[elementCount++] = { BUTTON, x, y, w, h, hexTo565(bg), hexTo565(tc), text, tx, fontID };
+
+  elements[elementCount - 1].text.reserve(32);  // buton yazısı
+  elements[elementCount - 1].tx.reserve(16);    // BT komutu
+  
   drawTextBox(elements[elementCount - 1], true);
 }
+
+void setElementText(int idx, const String &newText) {
+  if (idx < 0 || idx >= elementCount) return;
+
+  UIElement &e = elements[idx];
+  // Sadece LABEL (istersen BUTTON da ekleyebilirsin)
+  if (e.type != LABEL) return;
+
+  // Metni güncelle
+  e.text = newText;
+
+  // SADECE o elemanı yeniden çiz (diğerlerine dokunmaz)
+  drawTextBox(e, false);
+}
+
+void setButtonText(int idx, const String &newText) {
+  if (idx < 0 || idx >= elementCount) return;
+
+  UIElement &e = elements[idx];
+  if (e.type != BUTTON) return;
+
+  e.text = newText;
+  drawTextBox(e, true);   // rounded = true (button)
+}
+
+
 
 /* ===================== BAĞLANMA ===================== */
 void connectDevice1() {
@@ -210,6 +246,37 @@ void processCommand(String cmd) {
   else if (cmd == "001") {
     connectDevice1();
   }
+
+else if (cmd.startsWith("set(")) {
+  int close = cmd.lastIndexOf(')');
+  if (close < 0) return;
+
+  String p = cmd.substring(4, close);  // "idx,text..."
+  int comma = p.indexOf(',');
+  if (comma < 0) return;
+
+  int idx = p.substring(0, comma).toInt();
+  String text = p.substring(comma + 1); // geri kalan her şey metin
+
+  setElementText(idx, text);
+}
+
+else if (cmd.startsWith("setbtn(")) {
+  int close = cmd.lastIndexOf(')');
+  if (close < 0) return;
+
+  String p = cmd.substring(7, close);     // "idx,text..."
+  int comma = p.indexOf(',');
+  if (comma < 0) return;
+
+  int idx = p.substring(0, comma).toInt();
+  String text = p.substring(comma + 1);
+
+  setButtonText(idx, text);
+}
+
+
+  
 }
 
 /* ===================== KURULUM EKRANI ===================== */
