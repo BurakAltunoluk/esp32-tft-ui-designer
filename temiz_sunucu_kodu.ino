@@ -17,6 +17,10 @@ void loop() {
     String gelen = SerialBT.readStringUntil('\n');
     gelen.trim();
     Serial.println(gelen);
+    if (gelen == "ds") {
+      SerialBT.disconnect();
+      menuGonderildi = 0;
+      }
 
   }
  if (SerialBT.hasClient() && menuGonderildi == 0) {
@@ -33,6 +37,6 @@ void drawMainUI() {
   // index 0 - Baslik
   SerialBT.println("clear(0xCD0E0E)");
   delay(80);
-  SerialBT.println("button(35,157,160,48,0x7C5CFF,0xFFFFFF,send,CMD,1)");
+  SerialBT.println("button(35,170,160,48,0x7C5CFF,0xFFFFFF,disconnect,ds,1)");
 
 }
