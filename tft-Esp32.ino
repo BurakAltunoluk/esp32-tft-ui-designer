@@ -3,6 +3,8 @@ ESP32 TFT UI Client
 - Bluetooth üzerinden komut alır
 - Dokunmatik ekran ile butonlara basılabilir
 - Gelen komutları seri monitöre yazdırır
+- Batarya voltaji olcer ve ekrana yazdirir
+- 30 saniye icinde ekrani kapatir kullanilmadigi durumda ve ekrana tiklayinca ekran acilir yine
 */
 
 #include "BluetoothSerial.h"
@@ -37,7 +39,8 @@ uint8_t serverAddress[6] = {0x00, 0x4B, 0x12, 0xEE, 0x4E, 0x12};
 #define TFT_RST  -1
 #define TFT_BL   21
 #define BACKLIGHT_ON() digitalWrite(TFT_BL, HIGH)
-
+bool screenOff = false;
+uint32_t lastTouchMs = 0;
 /* ===================== TOUCH ===================== */
 #define TOUCH_CS   33
 #define TOUCH_IRQ  36
@@ -45,6 +48,8 @@ uint8_t serverAddress[6] = {0x00, 0x4B, 0x12, 0xEE, 0x4E, 0x12};
 #define TOUCH_MOSI 32
 #define TOUCH_MISO 39
 
+#define BAT_PIN 34
+ 
 Arduino_DataBus *bus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCK, TFT_MOSI, TFT_MISO);
 Arduino_GFX *gfx = new Arduino_ILI9341(bus, TFT_RST, 1, false);
 XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
@@ -180,6 +185,47 @@ void setButtonText(int idx, const String &newText) {
   e.text = newText;
   drawTextBox(e, true);   // rounded = true (button)
 }
+//------
+
+void screenSleep() {
+  digitalWrite(TFT_BL, LOW);   // backlight OFF
+  screenOff = true;
+}
+
+void screenWake() {
+  digitalWrite(TFT_BL, HIGH);  // backlight ON
+  screenOff = false;
+  redrawAll();                 // geri gelince UI'yi çiz
+}
+
+
+
+
+//------
+void batteryAsk() {
+
+ analogReadResolution(12);
+  analogSetPinAttenuation(BAT_PIN, ADC_11db);
+
+  delay(20); // ADC stabil olsun
+
+  uint32_t sum = 0;
+  for (int i = 0; i < 20; i++) {
+    sum += analogReadMilliVolts(BAT_PIN);
+    delay(2);
+  }
+
+  float mv = sum / 20.0;
+
+  // Kartta voltage divider var → *2
+  float voltage = (mv / 1000.0) * 2.0;
+
+  Serial.print("REAL BATTERY VOLTAGE = ");
+  Serial.println(voltage, 2);
+
+  // BUTONA YAZDIR
+  processCommand("setbtn(5," + String(voltage, 2) + "V)");
+}
 
 
 
@@ -297,12 +343,14 @@ void kurulum() {
   delay(10);
 
   processCommand("label(-5,297,246,25,0xC19A9A,0xFFFFFF,Burachline 2.1v,3)");
+  delay(10);
+  processCommand("button(40,7,160,24,0x33199A,0xFFFFFF,Battery,btry,1)");
 }
 
 /* ===================== SETUP ===================== */
 void setup() {
   Serial.begin(115200);
-
+  analogReadResolution(12); // 0–4095
   pinMode(TFT_BL, OUTPUT);
   BACKLIGHT_ON();
 
@@ -320,9 +368,25 @@ void setup() {
 }
 
 /* ===================== LOOP ===================== */
-void loop() {
+void loop(){ 
+
+  if (!screenOff && (millis() - lastTouchMs > 30000)) {
+  screenSleep();
+  }
+ 
   // TOUCH
   if (ts.touched()) {
+
+  lastTouchMs = millis();
+
+  if (screenOff) {
+  screenWake();
+  delay(250);
+  return; // o dokunuşu buton tıklaması sayma
+}
+
+
+    
     TS_Point p = ts.getPoint();
     int px = map(p.x, 300, 3800, 0, gfx->width());
     int py = map(p.y, 300, 3800, 0, gfx->height());
@@ -351,6 +415,13 @@ void loop() {
           
           kurulum();        
         }
+
+          if (e.tx == "btry") {
+            
+          batteryAsk();
+             
+        }
+
 
         delay(300);
         break;
