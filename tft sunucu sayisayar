@@ -1,0 +1,69 @@
+
+//sayi sayiyor reset butonu var disconnect butonu var
+
+unsigned long lastTick = 0;
+const unsigned long interval = 500; // 3 saniye
+int counter = 0;
+
+
+#include "BluetoothSerial.h"
+BluetoothSerial SerialBT;
+int menuGonderildi = 0;
+
+
+void setup() {
+ Serial.begin(115200);
+ delay(1000);
+ SerialBT.begin("ESP32_SUNUCU");
+}
+
+
+
+void loop() {
+
+  unsigned long now = millis();
+
+  if (now - lastTick >= interval) {
+    lastTick = now;
+
+    counter++; 
+    SerialBT.println("set(0," + String(counter) + ")");
+    
+  }
+    /* ---- CLIENT'tan gelenler ---- */
+  if (SerialBT.available()) {
+    String gelen = SerialBT.readStringUntil('\n');
+    gelen.trim();
+    Serial.println(gelen);
+    if (gelen == "ds") {
+      SerialBT.disconnect();
+      menuGonderildi = 0;
+      }
+    if (gelen == "rst") {
+      counter = 0;
+      }
+      
+
+  }
+ if (SerialBT.hasClient() && menuGonderildi == 0) {
+    menuGonderildi = 1;
+    drawMainUI();
+  }
+}
+
+
+void drawMainUI() {
+  SerialBT.println("rotation(0)");
+  delay(150);
+  SerialBT.println("clear(0x000000)");
+  delay(30);
+  SerialBT.println("line(72,190,172,190,0xFFFF00,3)");
+  delay(30);
+  SerialBT.println("label(40,103,160,48,0x000000,0xFFFFFF,0,7)");
+  delay(30);
+  SerialBT.println("button(43,279,149,30,0xC7236A,0xFFFFFF,disconnect,ds,1)");
+  delay(30);
+  SerialBT.println("button(69,197,104,21,0x7C5CFF,0xFFFFFF,Reset,rst,1)");
+
+  
+}
